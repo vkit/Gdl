@@ -1,23 +1,30 @@
 from django.conf.urls import url
 from .import views
-from django.conf.urls.static import static
-from django.conf import settings
-
-
+# url(r'^(?P<pk>[^/]+)/detail/$', views.CustomerDetailView.as_view(),
+#         name='detail'),
 urlpatterns = [
-    url(r'^list/$', views.TicketView.as_view(), name='list'),
-    url(r'^pending/$', views.PendingTicketView.as_view(), name='pending'),
-    url(r'^solved/$', views.SolvedTicketView.as_view(), name='solved'),
-    url(r'^reopened/$', views.ReopenedTicketView.as_view(), name='reopened'),
-    url(r'^closed/$', views.ClosedTicketView.as_view(), name='closed'),
-    url(r'^(?P<pk>\d+)/detail/$', views.TicketDetailView.as_view(),
+    url(r'^list/$', views.ContactView.as_view(), name="list"),
+    url(r'^create/$', views.ModalCreateView.as_view(), name="create"),
+    url(r'^detail/(?P<pk>[^/]+)/$', views.CrmDetailView.as_view(),
         name='detail'),
-    url(r'^(?P<pk>\d+)/update/$', views.TicketupdateView.as_view(),
+    url(r'^communication/(?P<pk>\d+)/$', views.CommunicationView.as_view(),
+        name='communication'),
+    # url(r'^(?P<pk>\d+)/update/$', views.CrmupdateView.as_view(),
+    #     name='update'),
+    url(r'^update/(?P<pk>[^/]+)/$', views.CrmupdateView.as_view(),
         name='update'),
-    url(r'^(?P<pk>\d+)/comment/$', views.TicketCommentView.as_view(),
-        name='comment'),
+    url(r'^delete/(?P<pk>\d+)/$', views.DeleteCommunicationView.as_view(),
+        name='delete'),
+    url(r'^followupToday/$', views.CrmFollowUpView.as_view(), name="followupToday"),
+    url(r'^dashboard/$', views.DashBoardView.as_view(), name="dashboard"),
+    url(r'^hot/$', views.HotView.as_view(), name="hot"),
+    url(r'^proposed/$', views.ProposedView.as_view(), name="proposed"),
+    url(r'^proposedpend/$', views.ProposalPendingView.as_view(), name="proposedpend"),
     url(r'^$', 'django.contrib.auth.views.login',
         {'template_name': 'base_login.html'}, name='login'),
     url(r'^logout/$', 'django.contrib.auth.views.logout',
         {'template_name': 'base_login.html'}, name='logout'),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    url(r'^url_dispatch/', views.UrlDispatchView.as_view(), name='url_dispatch'),
+    url(r'^change_password/',views.change_password,name='change_password'),
+    
+]

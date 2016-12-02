@@ -1,20 +1,37 @@
 from django import forms
-from .models import Ticket, TicketComment
+from .models import Contact, Communication
 
 
-class TicketForm(forms.ModelForm):
+class ContactForm(forms.ModelForm):
     class Meta:
-        model = Ticket
-        fields = ('project', 'title', 'body', 'file')
+        model = Contact
+        fields = ('contact_name', 'company_name', 'status', 'bio', 'email', 'addressline1', 'addressline2', 'zipcode', 'city', 'state', 'country', 'ph_number1', 'ph_number2')
 
 
-class TicketCommentForm(forms.ModelForm):
+class CommunicationForm(forms.ModelForm):
+        class Meta:
+            model = Communication
+            fields = (
+                'type_of_communicaiton', 'direction', 'remark', 'next_followup')
+
+
+class ContactUpdateForm(forms.ModelForm):
     class Meta:
-        model = TicketComment
-        fields = ('body',)
+        model = Contact
+        fields = ('contact_name', 'company_name', 'status', 'bio', 'email', 'addressline1', 'addressline2', 'zipcode', 'city', 'state', 'country', 'ph_number1', 'ph_number2')
 
 
-class TicketUpdateForm(forms.ModelForm):
-    class Meta:
-        model = Ticket
-        fields = ['status', ]
+class CommunicationUpdateForm(forms.ModelForm):
+        class Meta:
+            model = Communication
+            fields = (
+                'type_of_communicaiton', 'direction', 'remark', 'next_followup') 
+
+
+class DeleteCommForm(forms.ModelForm):
+        class Meta:
+            model = Communication
+            fields = (
+                'type_of_communicaiton', 'direction', 'remark', 'next_followup')                    
+
+ 

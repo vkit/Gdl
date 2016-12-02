@@ -1,167 +1,232 @@
-from django.views.generic import ListView, View, DetailView
-from .models import Ticket
-from .forms import TicketForm, TicketCommentForm, TicketUpdateForm
+from django.views.generic import ListView, DetailView, View, TemplateView
+
 from django.shortcuts import HttpResponseRedirect
-from django.contrib import messages
+from django.shortcuts import render
+
+from django.utils.timezone import datetime
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib import messages
+from django.contrib.auth.mixins import PermissionRequiredMixin
+
+from django.core.exceptions import ImproperlyConfigured
+from django.core.urlresolvers import reverse
+from django.http import Http404
+
+from django.contrib.auth.decorators import login_required
+from base.views import GenericSelfRedirection, GenericModalUpdateView
 
 
-class TicketView(LoginRequiredMixin, ListView):
-    template_name = 'ticket_list.html'
-    model = Ticket
-    login_url = '/ticket/'
+from .models import Contact, Communication
+from .forms import ContactForm, CommunicationForm, ContactUpdateForm, DeleteCommForm
+
+
+class DashBoardView(PermissionRequiredMixin, ListView):
+    template_name = 'dashboard.html'
+    model = Communication
+
+    permission_required = 'auth.add_user'
 
     def get_context_data(self, **kwargs):
-        context = super(TicketView, self).get_context_data(**kwargs)
-        context['form'] = TicketForm()
-        context['pending_count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='PENDING').count()
-        context['solved_count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='SOLVED').count()
-        context['reopened_count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='REOPENED').count()
-        context['closed_count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='CLOSED').count()
-        context['total_ticket'] = Ticket.objects.filter(
-            created_by=self.request.user).count()
-        context['posts'] = Ticket.objects.filter(
-            created_by=self.request.user).order_by('-created')
-        context['user'] = self.request.user
-        print "I am heretoo"
+        context = super(DashBoardView, self).get_context_data(**kwargs)
+        context['followup_count'] = Communication.objects.filter(
+            next_followup__date=datetime.today()).count()
+        context['hot_count'] = Contact.objects.filter(status=3).count()
+        context['proposed_count'] = Contact.objects.filter(status=5).count()
+        context['proposal_count'] = Contact.objects.filter(status=9).count()
         return context
+
+
+class ContactView(LoginRequiredMixin, ListView):
+    template_name = 'list.html'
+    model = Contact
+
+    def get_context_data(self, **kwargs):
+        context = super(ContactView, self).get_context_data(**kwargs)
+        context['form'] = ContactForm()
+        # context['contact'] = Contact.objects.get(pk=self.kwargs.get('pk'))
+        # context['hot_count'] = Contact.objects.filter(status='Hot').count()
+        context['user'] = self.request.user
+        try:
+            groups = self.request.user.groups.all()
+            groups = [group.name for group in groups]
+        except:
+            raise Http404(
+                "User is not assigned to any group,Please assign and Try again")
+        if 'sales' in groups:
+            groups.remove('sales')
+            context['contacts'] = [
+                contact for contact in Contact.objects.filter(
+                    group__name=groups[0])
+            ]
+        else:
+            context['contacts'] = Contact.objects.all()
+        return context
+
+
+class ModalCreateView(
+    PermissionRequiredMixin,
+    GenericSelfRedirection
+):
+    form_class = ContactForm
+    object_name = 'Contact'
+    permission_required = 'crm.add_crm'
+    url_pattern_list = ['crm', 'detail']
+    error_url = '/crm/list/'
+
+
+class CrmDetailView(LoginRequiredMixin, DetailView):
+    template_name = 'detail.html'
+    model = Contact
+
+    def get_context_data(self, **kwargs):
+        context = super(CrmDetailView, self).get_context_data(**kwargs)
+        context['user'] = self.request.user
+        context['contact'] = Contact.objects.get(pk=self.kwargs.get('pk'))
+        context['follow'] = Communication.objects.filter(
+            next_followup__gte=datetime.now())
+        context['form'] = CommunicationForm()
+        context['form1'] = ContactUpdateForm(instance=context['contact'])
+
+        # context['del'] = Communication.objects.last().delete()
+        print "+++++++++"
+        print context['follow']
+        print "+++++++++"
+        return context
+
+
+class CrmupdateView(
+    PermissionRequiredMixin, GenericModalUpdateView
+):
+
+    permission_required = 'customer.add_customer'
+    form_class = ContactUpdateForm
+    object_name = 'Contact'
+    model = Contact
+    app_url = '/crm/'
+    page_url = '/detail/'
+
+    def get_success_url(self):
+        return '/crm/detail/{0}'.format(self.kwargs.get('pk'))
+
+
+class CrmFollowUpView(LoginRequiredMixin, ListView):
+    template_name = 'followuplink.html'
+    model = Communication
+
+    def get_context_data(self, **kwargs):
+        context = super(CrmFollowUpView, self).get_context_data(**kwargs)
+        context['followups'] = Communication.objects.filter(
+            next_followup__date=datetime.today())
+        context['followup_count'] = Communication.objects.filter(
+            next_followup__date=datetime.today()).count()
+        return context
+
+
+class CommunicationView(LoginRequiredMixin, View):
 
     def post(self, request, *args, **kwargs):
         print "I am here"
-        # check modal also put enctype="multipart/form-data" in
-        # html for image
-        form = TicketForm(request.POST, request.FILES)
+        contact = Contact.objects.get(pk=self.kwargs.get('pk'))
+        form = CommunicationForm(request.POST)
         print "++++++"
         print form
         print "++++++"
         print 'i m sloved'
         if form.is_valid():
             instance = form.instance
-            instance.created_by = self.request.user
+            instance.contact = contact
+            instance.user = self.request.user
             instance.save()
             print 'i m valid form'
             form.save()
-            print 'form is saved'
-            messages.success(request, 'Well done!Your Ticket is Addded Succesfully.')
+            print 'i m saved'
+            messages.success(
+                request, 'Well done!Your communication is Addded Succesfully.')
         else:
             print form.errors
-        return HttpResponseRedirect('/ticket/list/')
-
-
-class TicketDetailView(DetailView):
-    template_name = 'ticket_detail.html'
-    model = Ticket
-
-    def get_context_data(self, **kwargs):
-        context = super(TicketDetailView, self).get_context_data(**kwargs)
-        context['form'] = TicketCommentForm()
-        context['post'] = Ticket.objects.get(pk=self.kwargs.get('pk'))
-        context['form1'] = TicketUpdateForm(instance=context['post'])
-        return context
-
-
-class TicketCommentView(View):
-
-    def post(self, request, *args, **kwargs):
-        form = TicketCommentForm(request.POST)
-        if form.is_valid():
-            instance = form.instance
-            post = Ticket.objects.get(pk=self.kwargs.get('pk'))
-            instance.post = post
-            form.save()
-            messages.success(
-                request, 'Well done!Your Comment is Added Succesfully.')
-            return HttpResponseRedirect(
-                '/ticket/{0}/detail/'.format(self.kwargs.get('pk')))
-        else:
-            messages.warning(request, form.errors)
-            return HttpResponseRedirect(
-                '/ticket/{0}/detail/'.format(self.kwargs.get('pk')))
-
-
-class TicketupdateView(View):
-
-    def post(self, request, *args, **kwargs):
-        post = Ticket.objects.get(pk=self.kwargs.get('pk'))
-        print "++++++"
-        print post
-        print "++++++"
-        form1 = TicketUpdateForm(request.POST, instance=post)
-        if form1.is_valid():
-            print 'I am form1 valid'
-            form1.save()
-            messages.success(
-                request, 'Well done!Your status is updated succesfully.')
-        else:
-            print form1.errors
+            messages.warning(
+                request, form.errors)
         return HttpResponseRedirect(
-            '/ticket/{0}/detail/'.format(post.id))
+            '/crm/detail/{0}/'.format(contact.id))
 
 
-class PendingTicketView(ListView):
-    template_name = 'pending.html'
-    model = Ticket
+class DeleteCommunicationView(LoginRequiredMixin, View):
+
+    def get(self, request, *args, **kwargs):
+        Communication.objects.latest('created_at').delete()
+        contact = Contact.objects.get(pk=self.kwargs.get('pk'))
+        messages.success(
+            request, 'Well done!Your item is removed Succesfully.')
+        return HttpResponseRedirect(
+            '/crm/detail/{0}/'.format(contact.id))
+
+
+class HotView(PermissionRequiredMixin, ListView):
+    template_name = 'hot.html'
+    model = Contact
+
+    permission_required = 'auth.add_user'
 
     def get_context_data(self, **kwargs):
-        context = super(PendingTicketView, self).get_context_data(**kwargs)
-        context['count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='PENDING').count()
-        context['pending_tickets'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='PENDING')
+        context = super(HotView, self).get_context_data(**kwargs)
+        context['hot_count'] = Contact.objects.filter(status=3).count()
+        context['hot_followup'] = Contact.objects.filter(status=3)
         return context
 
 
-class SolvedTicketView(ListView):
-    template_name = 'solved.html'
-    model = Ticket
+class ProposedView(PermissionRequiredMixin, ListView):
+    template_name = 'proposed.html'
+    model = Contact
+
+    permission_required = 'auth.add_user'
 
     def get_context_data(self, **kwargs):
-        context = super(SolvedTicketView, self).get_context_data(**kwargs)
-        context['count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='SOLVED').count()
-        context['solved_tickets'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='SOLVED')
+        context = super(ProposedView, self).get_context_data(**kwargs)
+        context['proposed_count'] = Contact.objects.filter(status=5).count()
+        context['proposed_folloup'] = Contact.objects.filter(status=5)
         return context
 
 
-class ReopenedTicketView(ListView):
-    template_name = 'reopened.html'
-    model = Ticket
+class ProposalPendingView(PermissionRequiredMixin, ListView):
+    template_name = 'proposed_pending.html'
+    model = Contact
+    permission_required = 'auth.add_user'
 
     def get_context_data(self, **kwargs):
-        context = super(ReopenedTicketView, self).get_context_data(**kwargs)
-        context['count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='REOPENED').count()
-        context['reopened_tickets'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='REOPENED')
+        context = super(ProposalPendingView, self).get_context_data(**kwargs)
+        context['proposal_count'] = Contact.objects.filter(status=9).count()
+        context['pending_proposed_folloup'] = Contact.objects.filter(status=9)
         return context
 
 
-class ClosedTicketView(ListView):
-    template_name = 'closed.html'
-    model = Ticket
+class UrlDispatchView(LoginRequiredMixin, TemplateView):
 
-    def get_context_data(self, **kwargs):
-        context = super(ClosedTicketView, self).get_context_data(**kwargs)
-        context['count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='CLOSED').count()
-        context['closed_tickets'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='CLOSED')
-        return context
+    def get(self, *args, **kwargs):
+
+        try:
+            groups = self.request.user.groups.all()
+            groups = [group.name for group in groups]
+        except:
+            raise Http404(
+                "User is not assigned to any group, Please assign and Try again")
+
+        if 'sales' or 'admin' in groups:
+            return HttpResponseRedirect(reverse('crm:list'))
+        else:
+            return HttpResponseRedirect(reverse('ticket:list'))
 
 
-class TotalStatusView(ListView):
-    template_name = 'total.html'
-    model = Ticket
-
-    def get_context_data(self, **kwargs):
-        context = super(TotalStatusView, self).get_context_data(**kwargs)
-        context['count'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='SOLVED').count()
-        context['solved_tickets'] = Ticket.objects.filter(
-            created_by=self.request.user).filter(status='SOLVED')
-        return context
+@login_required
+def change_password(request):
+    username = request.user.username
+    if request.method == "POST":
+        if request.POST['password1'] == request.POST['password2']:
+            request.user.set_password(request.POST['password1'])
+            request.user.save()
+            messages.success(request, "Password reset successful ")
+            return HttpResponseRedirect("/crm/")
+        else:
+            messages.success(request, "Try again Error Password did not match")
+            return render(request, 'change_password.html', {'username':username})
+    else:
+        return render(request, 'change_password.html', {'username':username})
