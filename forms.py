@@ -1,37 +1,26 @@
 from django import forms
-from .models import Contact, Communication
+from .models import ColdCallContact, Communication
 
 
-class ContactForm(forms.ModelForm):
+class ColdCallContactForm(forms.ModelForm):
     class Meta:
-        model = Contact
-        fields = ('contact_name', 'company_name', 'status', 'bio', 'email', 'addressline1', 'addressline2', 'zipcode', 'city', 'state', 'country', 'ph_number1', 'ph_number2')
+        model = ColdCallContact
+        fields = ('contact_name', 'company_name', 'bio',
+                  'ph_number1', 'email', 'status', 'category',
+                  'website', 'remark', 'response')
 
 
 class CommunicationForm(forms.ModelForm):
         class Meta:
             model = Communication
             fields = (
-                'type_of_communicaiton', 'direction', 'remark', 'next_followup')
+                'type_of_communication', 'remark', 'next_followup')
 
 
-class ContactUpdateForm(forms.ModelForm):
+class ColdCallContactUpdateForm(forms.ModelForm):
     class Meta:
-        model = Contact
-        fields = ('contact_name', 'company_name', 'status', 'bio', 'email', 'addressline1', 'addressline2', 'zipcode', 'city', 'state', 'country', 'ph_number1', 'ph_number2')
+        model = ColdCallContact
+        fields = ('contact_name', 'company_name', 'bio',
+                  'ph_number1', 'email', 'status', 'category',
+                  'website', 'remark', 'response')
 
-
-class CommunicationUpdateForm(forms.ModelForm):
-        class Meta:
-            model = Communication
-            fields = (
-                'type_of_communicaiton', 'direction', 'remark', 'next_followup') 
-
-
-class DeleteCommForm(forms.ModelForm):
-        class Meta:
-            model = Communication
-            fields = (
-                'type_of_communicaiton', 'direction', 'remark', 'next_followup')                    
-
- 

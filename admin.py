@@ -1,5 +1,7 @@
+from django.http import Http404
 from django.contrib import admin
-from .models import Contact, Communication
+from .models import ColdCallContact, Communication
+from crm.models import Contact
 
 
 class Communicationline(admin.TabularInline):
@@ -7,27 +9,32 @@ class Communicationline(admin.TabularInline):
     extra = 1
 
 
-class ContactAdmin(admin.ModelAdmin):
-    search_fields = ['company_name', 'status']
+class ColdCallContactAdmin(admin.ModelAdmin):
+    search_fields = ['company_name', 'user__username']
     list_display = [
-        'company_name', 'status', 'ph_number1', 'total_communications',
-        'next_followup_date', 'created_at', 'updated_at']
-    fieldsets = [
-        ('Overview:', {'fields': ['company_name', 'contact_name',
-                                  'status', 'ph_number1',
-                                  'email', 'bio', 'group'
-                                  ]}),
-        ('Other:', {'fields': ['addressline1', 'addressline2',
-                               'zipcode', 'city',
-                               'state', 'country'],
-                    'classes': ['collapse']}),
-    ]
-    date_hierarchy = 'created_at'
+        'company_name', 'contact_name', 'ph_number1', 'email', 'status',
+        'category', 'user', 'created_at', 'updated_at', 'remark']
+    ordering = ('-updated_at',)
+    date_hierarchy = 'updated_at'
     empty_value_display = '-empty-'
-    list_filter = ('status', 'created_at', 'updated_at')
+    list_filter = ('status', 'created_at', 'user')
+    actions = ['move_to_contact']
     inlines = [Communicationline]
 
     class Meta:
-        model = Contact
+        model = ColdCallContact
 
-admin.site.register(Contact, ContactAdmin)
+    def move_to_contact(self, request, queryset):
+        try:
+            for obj in queryset:
+                Contact.objects.create(
+                    contact_name=obj.contact_name,
+                    company_name=obj.company_name, status=2,
+                    bio=obj.bio, ph_number1=obj.ph_number1,
+                    email=obj.email)
+        except:
+            raise Http404
+    move_to_contact.short_description = "Move selected contacts"
+
+
+admin.site.register(ColdCallContact, ColdCallContactAdmin)

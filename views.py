@@ -1,50 +1,23 @@
-from django.views.generic import ListView, DetailView, View, TemplateView
-
+from .models import ColdCallContact, Communication
+from django.views.generic import ListView, DetailView, View
+from .forms import ColdCallContactForm, CommunicationForm, ColdCallContactUpdateForm
 from django.shortcuts import HttpResponseRedirect
-from django.shortcuts import render
-
-from django.utils.timezone import datetime
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
-
-from django.core.exceptions import ImproperlyConfigured
-from django.core.urlresolvers import reverse
-from django.http import Http404
-
-from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from base.views import GenericSelfRedirection, GenericModalUpdateView
+from crm.models import Contact
+from django.core.exceptions import ImproperlyConfigured
+from django.http import Http404
+from django.contrib.auth.models import Group
 
 
-from .models import Contact, Communication
-from .forms import ContactForm, CommunicationForm, ContactUpdateForm, DeleteCommForm
-
-
-class DashBoardView(PermissionRequiredMixin, ListView):
-    template_name = 'dashboard.html'
-    model = Communication
-
-    permission_required = 'auth.add_user'
+class ColdCallContactView(ListView):
+    template_name = 'coldcall_list.html'
+    model = ColdCallContact
 
     def get_context_data(self, **kwargs):
-        context = super(DashBoardView, self).get_context_data(**kwargs)
-        context['followup_count'] = Communication.objects.filter(
-            next_followup__date=datetime.today()).count()
-        context['hot_count'] = Contact.objects.filter(status=3).count()
-        context['proposed_count'] = Contact.objects.filter(status=5).count()
-        context['proposal_count'] = Contact.objects.filter(status=9).count()
-        return context
-
-
-class ContactView(LoginRequiredMixin, ListView):
-    template_name = 'list.html'
-    model = Contact
-
-    def get_context_data(self, **kwargs):
-        context = super(ContactView, self).get_context_data(**kwargs)
-        context['form'] = ContactForm()
-        # context['contact'] = Contact.objects.get(pk=self.kwargs.get('pk'))
-        # context['hot_count'] = Contact.objects.filter(status='Hot').count()
+        context = super(ColdCallContactView, self).get_context_data(**kwargs)
+        context['form'] = ColdCallContactForm()
         context['user'] = self.request.user
         try:
             groups = self.request.user.groups.all()
@@ -54,12 +27,11 @@ class ContactView(LoginRequiredMixin, ListView):
                 "User is not assigned to any group,Please assign and Try again")
         if 'sales' in groups:
             groups.remove('sales')
-            context['contacts'] = [
-                contact for contact in Contact.objects.filter(
-                    group__name=groups[0])
-            ]
+            context['coldcallcontacts'] = [
+                coldcall for coldcall in ColdCallContact.objects.filter(
+                    group__name=groups[0])]
         else:
-            context['contacts'] = Contact.objects.all()
+            context['coldcallcontacts'] = ColdCallContact.objects.all()
         return context
 
 
@@ -67,66 +39,49 @@ class ModalCreateView(
     PermissionRequiredMixin,
     GenericSelfRedirection
 ):
-    form_class = ContactForm
-    object_name = 'Contact'
+    form_class = ColdCallContactForm
+    object_name = 'ColdCallContact'
     permission_required = 'crm.add_crm'
-    url_pattern_list = ['crm', 'detail']
-    error_url = '/crm/list/'
+    url_pattern_list = ['coldcall', 'detail']
+    error_url = '/coldcall/coldlist/'
 
 
-class CrmDetailView(LoginRequiredMixin, DetailView):
-    template_name = 'detail.html'
-    model = Contact
+class ColdCallContactDetailView(DetailView):
+    template_name = 'cold_detail.html'
+    model = ColdCallContact
 
     def get_context_data(self, **kwargs):
-        context = super(CrmDetailView, self).get_context_data(**kwargs)
+        context = super(
+            ColdCallContactDetailView, self).get_context_data(**kwargs)
         context['user'] = self.request.user
-        context['contact'] = Contact.objects.get(pk=self.kwargs.get('pk'))
-        context['follow'] = Communication.objects.filter(
-            next_followup__gte=datetime.now())
+        context['coldcallcontact'] = ColdCallContact.objects.get(
+            pk=self.kwargs.get('pk'))
         context['form'] = CommunicationForm()
-        context['form1'] = ContactUpdateForm(instance=context['contact'])
-
-        # context['del'] = Communication.objects.last().delete()
-        print "+++++++++"
-        print context['follow']
-        print "+++++++++"
+        context['form1'] = ColdCallContactUpdateForm(
+            instance=context['coldcallcontact'])
         return context
 
 
-class CrmupdateView(
+class ColdCallContactUpdateView(
     PermissionRequiredMixin, GenericModalUpdateView
 ):
 
-    permission_required = 'customer.add_customer'
-    form_class = ContactUpdateForm
-    object_name = 'Contact'
-    model = Contact
-    app_url = '/crm/'
+    permission_required = 'crm.add_crm'
+    form_class = ColdCallContactUpdateForm
+    object_name = 'ColdCallcontact'
+    model = ColdCallContact
+    app_url = '/coldcall/'
     page_url = '/detail/'
 
     def get_success_url(self):
-        return '/crm/detail/{0}'.format(self.kwargs.get('pk'))
+        return '/coldcall/detail/{0}'.format(self.kwargs.get('pk'))
 
 
-class CrmFollowUpView(LoginRequiredMixin, ListView):
-    template_name = 'followuplink.html'
-    model = Communication
-
-    def get_context_data(self, **kwargs):
-        context = super(CrmFollowUpView, self).get_context_data(**kwargs)
-        context['followups'] = Communication.objects.filter(
-            next_followup__date=datetime.today())
-        context['followup_count'] = Communication.objects.filter(
-            next_followup__date=datetime.today()).count()
-        return context
-
-
-class CommunicationView(LoginRequiredMixin, View):
+class CommunicationView(View):
 
     def post(self, request, *args, **kwargs):
         print "I am here"
-        contact = Contact.objects.get(pk=self.kwargs.get('pk'))
+        coldcallcontact = ColdCallContact.objects.get(pk=self.kwargs.get('pk'))
         form = CommunicationForm(request.POST)
         print "++++++"
         print form
@@ -134,99 +89,70 @@ class CommunicationView(LoginRequiredMixin, View):
         print 'i m sloved'
         if form.is_valid():
             instance = form.instance
-            instance.contact = contact
-            instance.user = self.request.user
+            instance.coldcallcontact = coldcallcontact
             instance.save()
             print 'i m valid form'
             form.save()
             print 'i m saved'
             messages.success(
-                request, 'Well done!Your communication is Addded Succesfully.')
+                request, 'Well done!Your message is Addded Succesfully.')
         else:
             print form.errors
             messages.warning(
                 request, form.errors)
         return HttpResponseRedirect(
-            '/crm/detail/{0}/'.format(contact.id))
+            '/coldcall/detail/{0}/'.format(coldcallcontact.id))
 
 
-class DeleteCommunicationView(LoginRequiredMixin, View):
+class MoveToCrmView(View):
+
+    def post(self, request, *args, **kwargs):
+        for_action = request.POST.getlist('for_action')
+        print "++++++"
+        print "+++++++"
+        print for_action
+        print "+++++++"
+        objs = ColdCallContact.objects.filter(pk__in=for_action)
+        print "++++++"
+        print objs
+        print "+++++++"
+        if len(objs) == 0:
+            msg = "select atleast one object"
+            messages.warning(request, msg)
+        else:
+            try:
+                for obj in objs:
+                    obj.status = 3
+                    Contact.objects.create(
+                        contact_name=obj.contact_name,
+                        company_name=obj.company_name, status=2,
+                        bio=obj.bio, ph_number1=obj.ph_number1,
+                        email=obj.email, group=obj.group
+                    )
+                    obj.save()
+                messages.success(
+                    request, 'Well done!Your contact is moved Succesfully.')
+            except:
+                messages.warning(
+                    request, 'Selected contacts already moved.')
+        return HttpResponseRedirect('/coldcall/coldlist/')
+
+
+class DeletecoldcallCommunicationView(View):
 
     def get(self, request, *args, **kwargs):
-        Communication.objects.latest('created_at').delete()
-        contact = Contact.objects.get(pk=self.kwargs.get('pk'))
-        messages.success(
-            request, 'Well done!Your item is removed Succesfully.')
-        return HttpResponseRedirect(
-            '/crm/detail/{0}/'.format(contact.id))
-
-
-class HotView(PermissionRequiredMixin, ListView):
-    template_name = 'hot.html'
-    model = Contact
-
-    permission_required = 'auth.add_user'
-
-    def get_context_data(self, **kwargs):
-        context = super(HotView, self).get_context_data(**kwargs)
-        context['hot_count'] = Contact.objects.filter(status=3).count()
-        context['hot_followup'] = Contact.objects.filter(status=3)
-        return context
-
-
-class ProposedView(PermissionRequiredMixin, ListView):
-    template_name = 'proposed.html'
-    model = Contact
-
-    permission_required = 'auth.add_user'
-
-    def get_context_data(self, **kwargs):
-        context = super(ProposedView, self).get_context_data(**kwargs)
-        context['proposed_count'] = Contact.objects.filter(status=5).count()
-        context['proposed_folloup'] = Contact.objects.filter(status=5)
-        return context
-
-
-class ProposalPendingView(PermissionRequiredMixin, ListView):
-    template_name = 'proposed_pending.html'
-    model = Contact
-    permission_required = 'auth.add_user'
-
-    def get_context_data(self, **kwargs):
-        context = super(ProposalPendingView, self).get_context_data(**kwargs)
-        context['proposal_count'] = Contact.objects.filter(status=9).count()
-        context['pending_proposed_folloup'] = Contact.objects.filter(status=9)
-        return context
-
-
-class UrlDispatchView(LoginRequiredMixin, TemplateView):
-
-    def get(self, *args, **kwargs):
-
+        a = Communication.objects.latest('created_at')
         try:
-            groups = self.request.user.groups.all()
-            groups = [group.name for group in groups]
+            if a is not None:
+                a.delete()
+                coldcallcontact = ColdCallContact.objects.get(pk=self.kwargs.get('pk'))
+                messages.success(
+                    request, 'Well done!Your item is removed Succesfully.')
+                return HttpResponseRedirect(
+                    '/coldcall/detail/{0}/'.format(coldcallcontact.id))
         except:
-            raise Http404(
-                "User is not assigned to any group, Please assign and Try again")
+            messages.warning(
+                request, 'No data to delete.')
+            return HttpResponseRedirect(
+                '/coldcall/detail/{0}/'.format(coldcallcontact.id))
 
-        if 'sales' or 'admin' in groups:
-            return HttpResponseRedirect(reverse('crm:list'))
-        else:
-            return HttpResponseRedirect(reverse('ticket:list'))
-
-
-@login_required
-def change_password(request):
-    username = request.user.username
-    if request.method == "POST":
-        if request.POST['password1'] == request.POST['password2']:
-            request.user.set_password(request.POST['password1'])
-            request.user.save()
-            messages.success(request, "Password reset successful ")
-            return HttpResponseRedirect("/crm/")
-        else:
-            messages.success(request, "Try again Error Password did not match")
-            return render(request, 'change_password.html', {'username':username})
-    else:
-        return render(request, 'change_password.html', {'username':username})
